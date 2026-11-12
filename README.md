@@ -10,7 +10,7 @@
 - 202504028 - YAGO LIMA COQUEIRO
 
 ## Apresentações
-1. Apresentação 1 – Tema e justificativa: [link dos slides]
+1. Apresentação 1 – Tema e justificativa: [[link dos slides]](https://canva.link/ul9vfvoujlhpmmj)
 2. Apresentação 2 – (a definir)
 
 ## Resumo
