@@ -1,0 +1,19 @@
+# Dados, pesos e checkpoints nunca são versionados (CLAUDE.md, seção 4)
+data/
+checkpoints/
+*.pt
+*.pth
+*.ckpt
+
+# Credenciais
+kaggle.json
+.kaggle/
+.env
+
+# Python
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.ipynb_checkpoints/
+.venv/
+venv/
