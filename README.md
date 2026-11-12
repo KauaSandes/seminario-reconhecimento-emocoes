@@ -57,6 +57,36 @@ Imagem -> Pré-processamento -> Detecção do rosto -> Extração de caracterís
 | 4 | Classificação e experimentos de robustez |
 | 5 | Análise dos resultados e apresentação final |
 
+## Ambiente da Frente A (redes neurais)
+
+A RTX 5060 é da série RTX 50 (arquitetura Blackwell, `sm_120`) e **exige PyTorch compilado com CUDA 12.8 ou mais novo**. Instale o PyTorch antes do resto:
+
+```bash
+pip install torch torchvision --index-url https://download.pytorch.org/whl/cu128
+pip install -r requirements.txt
+python -c "import torch; print(torch.__version__, torch.version.cuda, torch.cuda.is_available())"
+```
+
+A versão deve terminar em `+cu128` (ou um CUDA mais novo) e `is_available()` deve dar `True`. Se aparecer **`RuntimeError: CUDA error: no kernel image is available for execution on the device`**, o PyTorch instalado não tem kernels para a Blackwell (build antigo ou `+cpu`). Desinstale e reinstale com o comando acima.
+
+Verificação e preparação:
+
+```bash
+python scripts/check_env.py          # versões, GPU, autocast e benchmark da ResNet-18
+python scripts/cache_pretrained.py   # pesos ImageNet da ResNet-18 no cache local (treino sem internet)
+```
+
+Resultados do `check_env.py` na RTX 5060 (ResNet-18, lote 64, 224×224, forward + backward):
+
+| Precisão | ms/passo | imagens/s | pico de memória (MiB) |
+|---|---|---|---|
+| fp32 | _pendente_ | _pendente_ | _pendente_ |
+| AMP bf16 | _pendente_ | _pendente_ | _pendente_ |
+
+Versões: _pendente_ (Python, PyTorch, CUDA, driver).
+
+**Reserva:** [`notebooks/00_colab_setup.ipynb`](notebooks/00_colab_setup.ipynb) roda o mesmo fluxo no Colab (GPU T4), com checkpoints e cache de pesos no Google Drive. As credenciais do Kaggle entram pelos *Secrets* do Colab, nunca no notebook.
+
 ## Resultados
 (em desenvolvimento)
 
