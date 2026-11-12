@@ -1,0 +1,14 @@
+# PyTorch NÃO está aqui de propósito: instale antes com o índice do CUDA 12.8
+# (obrigatório na RTX 50 / Blackwell). Ver README, seção "Ambiente da Frente A".
+#   pip install torch torchvision --index-url https://download.pytorch.org/whl/cu128
+numpy
+scipy
+pandas
+scikit-learn
+scikit-image
+opencv-python
+matplotlib
+grad-cam          # pacote pytorch-grad-cam
+tqdm
+pytest
+jupyter
