@@ -20,10 +20,13 @@ contrato.
 """
 from __future__ import annotations
 
+import io
+from collections.abc import Iterable, Mapping
 from pathlib import Path
 from typing import Literal
 
 import numpy as np
+import pandas as pd
 
 # ------------------------------------------------------------------ constantes
 #: Ordem oficial dos rótulos (a mesma da FER-2013). Não mudar.
@@ -35,8 +38,10 @@ IMG_SIZE = 48
 SPLITS: tuple[str, ...] = ("train", "val", "test")
 #: Coluna ``Usage`` da FER-2013 -> nome do conjunto no projeto.
 USAGE_TO_SPLIT: dict[str, str] = {"Training": "train", "PublicTest": "val", "PrivateTest": "test"}
-#: Tamanhos oficiais da FER-2013 antes da limpeza.
-FER2013_SIZES: dict[str, int] = {"train": 28709, "val": 3589, "test": 3589}
+#: Tamanhos oficiais da FER-2013 antes da limpeza (por valor de ``Usage``).
+FER2013_SIZES: dict[str, int] = {"Training": 28709, "PublicTest": 3589, "PrivateTest": 3589}
+FER2013_COLUMNS: tuple[str, ...] = ("emotion", "pixels", "Usage")
+N_PIXELS = 48 * 48
 
 #: Rótulos do CK+ (1 raiva, 2 desprezo, 3 nojo, 4 medo, 5 alegria, 6 tristeza,
 #: 7 surpresa) -> ordem da FER-2013. O desprezo (2) é descartado.
@@ -63,6 +68,75 @@ CKPLUS_FOLDS_CSV = SPLITS_DIR / "ckplus_folds.csv"
 
 
 # -------------------------------------------------------------------- FER-2013
+def parse_pixels(pixels: Iterable[str], side: int = IMG_SIZE) -> np.ndarray:
+    """Converte strings de pixels ("70 80 82 ...") em uint8 [N, side, side].
+
+    Raises:
+        ValueError: se alguma linha não tiver ``side * side`` valores ou tiver valor fora
+            de 0..255.
+    """
+    text = "\n".join(pixels)
+    if not text:
+        return np.zeros((0, side, side), dtype=np.uint8)
+    try:
+        flat = np.loadtxt(io.StringIO(text), dtype=np.int16, ndmin=2)
+    except ValueError as exc:  # linhas com quantidades diferentes de valores, ou texto inválido
+        raise ValueError(f"coluna pixels malformada: {exc}") from exc
+    if flat.shape[1] != side * side:
+        raise ValueError(f"cada linha de pixels deveria ter {side * side} valores, tem {flat.shape[1]}")
+    if flat.min() < 0 or flat.max() > 255:
+        raise ValueError(f"valores de pixel fora de 0..255 (mín {flat.min()}, máx {flat.max()})")
+    return flat.astype(np.uint8).reshape(-1, side, side)
+
+
+def read_fer2013_csv(csv_path: Path | str | None = None,
+                     expected_sizes: Mapping[str, int] | None = FER2013_SIZES
+                     ) -> tuple[pd.DataFrame, np.ndarray]:
+    """Lê e valida o ``fer2013.csv``. Devolve ``(df, X)`` ou dá ``ValueError`` com a lista de problemas.
+
+    Confere se o arquivo tem 3 colunas (``emotion``, ``pixels``, ``Usage``), cada
+    ``pixels`` com 2304 valores entre 0 e 255, ``emotion`` entre 0 e 6, ``Usage`` só com
+    Training, PublicTest e PrivateTest e, se ``expected_sizes`` não for ``None``, as
+    contagens oficiais 28.709, 3.589 e 3.589 (35.887 no total).
+    """
+    path = Path(csv_path) if csv_path is not None else FER2013_CSV
+    if not path.is_file():
+        raise FileNotFoundError(f"{path} não existe. Rode primeiro: python scripts/download_data.py")
+    df = pd.read_csv(path, dtype={"pixels": str, "Usage": str})
+    df.columns = df.columns.str.strip()
+
+    problems: list[str] = []
+    if tuple(sorted(df.columns)) != tuple(sorted(FER2013_COLUMNS)):
+        raise ValueError(f"colunas esperadas {list(FER2013_COLUMNS)}, encontradas {list(df.columns)}")
+    if df.isna().any().any():
+        problems.append(f"{int(df.isna().any(axis=1).sum())} linhas com valores vazios")
+    df = df.dropna()
+    if expected_sizes is not None and len(df) != sum(expected_sizes.values()):
+        problems.append(f"{len(df)} linhas, esperado {sum(expected_sizes.values())}")
+    n_values = df["pixels"].str.strip().str.count(" ") + 1
+    bad = np.flatnonzero(n_values.to_numpy() != N_PIXELS)
+    if bad.size:
+        problems.append(f"{bad.size} linhas sem {N_PIXELS} pixels (ex.: linha {int(bad[0])} "
+                        f"tem {int(n_values.iloc[bad[0]])})")
+    if not pd.api.types.is_integer_dtype(df["emotion"]) or not df["emotion"].between(0, NUM_CLASSES - 1).all():
+        problems.append("emotion fora de 0..6 ou não inteiro")
+    usage = set(df["Usage"].unique())
+    if not usage <= set(USAGE_TO_SPLIT):
+        problems.append(f"valores de Usage inesperados: {sorted(usage - set(USAGE_TO_SPLIT))}")
+    if expected_sizes is not None:
+        counts = df["Usage"].value_counts().to_dict()
+        for usage_name, n in expected_sizes.items():
+            if counts.get(usage_name, 0) != n:
+                problems.append(f"Usage={usage_name}: {counts.get(usage_name, 0)} linhas, esperado {n}")
+    if problems:
+        raise ValueError(f"{path} inválido:\n  - " + "\n  - ".join(problems))
+
+    X = parse_pixels(df["pixels"])
+    df = df[list(FER2013_COLUMNS)].reset_index(drop=True)
+    df["emotion"] = df["emotion"].astype(np.int64)
+    return df, X
+
+
 def fer2013_arrays(csv_path: Path | str | None = None, cache_path: Path | str | None = None,
                    force: bool = False) -> dict[str, np.ndarray]:
     """Todas as 35.887 imagens da FER-2013, sem limpeza, com cache em ``.npz``.
@@ -105,6 +179,35 @@ def load_fer2013(split: Split, clean: bool = True, *, csv_path: Path | str | Non
 
 
 # ------------------------------------------------------------------------- CK+
+CKPLUS_IMAGES_DIRNAME = "cohn-kanade-images"
+CKPLUS_EMOTION_DIRNAME = "Emotion"
+
+
+def find_ckplus_dirs(raw_dir: Path | str | None = None, max_depth: int = 3) -> tuple[Path, Path] | None:
+    """Procura ``cohn-kanade-images/`` e ``Emotion/`` até ``max_depth`` níveis abaixo de ``raw_dir``.
+
+    Alguns zips do CK+ trazem as pastas aninhadas (ex.: ``Emotion_labels/Emotion/``). A
+    busca ignora ``__MACOSX``.
+
+    Returns:
+        ``(images_dir, emotion_dir)`` ou ``None`` se alguma das duas faltar.
+    """
+    root = Path(raw_dir) if raw_dir is not None else CKPLUS_RAW_DIR
+    found: dict[str, Path] = {}
+    frontier = [root] if root.is_dir() else []
+    for _ in range(max_depth + 1):
+        next_frontier: list[Path] = []
+        for d in frontier:
+            if d.name in (CKPLUS_IMAGES_DIRNAME, CKPLUS_EMOTION_DIRNAME):
+                found.setdefault(d.name, d)
+                continue
+            next_frontier += sorted(p for p in d.iterdir() if p.is_dir() and p.name != "__MACOSX")
+        frontier = next_frontier
+    if CKPLUS_IMAGES_DIRNAME in found and CKPLUS_EMOTION_DIRNAME in found:
+        return found[CKPLUS_IMAGES_DIRNAME], found[CKPLUS_EMOTION_DIRNAME]
+    return None
+
+
 def build_ckplus_cache(raw_dir: Path | str | None = None, cache_path: Path | str | None = None,
                        force: bool = False) -> Path:
     """Lê as sequências rotuladas do CK+, recorta o rosto e grava o cache ``.npz``.
