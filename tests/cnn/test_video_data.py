@@ -18,8 +18,9 @@ def test_sample_frame_indices(n, T):
 @pytest.mark.parametrize("mode,shape", [("small", (16, 1, 48, 48)), ("resnet", (16, 3, 112, 112))])
 def test_ck_sequence_dataset(fake_data, mode, shape):
     ds = V.CKSequenceDataset(fold=0, part="train", T=16, mode=mode, size=112 if mode == "resnet" else None)
-    seqs, labels = fake_data.load_ckplus(0, part="train", mode="sequence")
-    assert len(ds) == len(seqs)
+    seqs, labels, ids = fake_data.load_ckplus(0, part="train", mode="sequence")
+    assert len(ds) == len(seqs) and list(ds.ids) == list(ids)
+    assert any(len(s) < 16 for s in seqs)  # o CK+ falso tem 3 a 6 quadros: testa a repetição
     for i in range(len(ds)):
         x, y = ds[i]
         assert x.shape == shape and y.item() == labels[i]

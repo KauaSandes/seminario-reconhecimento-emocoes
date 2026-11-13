@@ -3,7 +3,7 @@ import pytest
 import torch
 
 from src.cnn import datasets as D
-from tests.conftest import FAKE_SIZES, STUBBED, fake_fer2013
+from tests.cnn.conftest import FAKE_SIZES, fake_fer2013
 
 
 def test_small_mode_shape_and_range(fake_data):
@@ -16,7 +16,7 @@ def test_small_mode_shape_and_range(fake_data):
 
 
 def test_small_mode_preserves_pixels(fake_data):
-    images, labels = fake_fer2013("val")
+    images, labels, _ = fake_fer2013("val")
     x, y = D.FERDataset("val", mode="small")[3]
     assert torch.allclose(x[0], torch.from_numpy(images[3]).float() / 255)
     assert y.item() == labels[3]
@@ -51,20 +51,21 @@ def test_degradation_only_on_test(fake_data):
         D.FERDataset("val", degradation="noise", level=10)
     with pytest.raises(ValueError):
         D.FERDataset("test", degradation="jpeg", level=10)
+    with pytest.raises(ValueError):  # nível fora de src.common.degrade.LEVELS
+        D.FERDataset("test", degradation="noise", level=7)
 
 
 @pytest.mark.parametrize("name,level", [("noise", 10), ("blur", 5), ("resolution", 12)])
 def test_degradation_uses_common_before_transform(fake_data, name, level):
     from src.common import degrade
 
-    images, _ = fake_fer2013("test")
-    fn = getattr(degrade, D.DEGRADATIONS[name])
-    np.random.seed(42)
-    expected = fn(images[0], level)
+    images, _, _ = fake_fer2013("test")
+    expected = degrade.apply_degradation(images, name, level, seed=42)  # o mesmo que a Frente B usa
 
     ds = D.FERDataset("test", mode="small", degradation=name, level=level, seed=42)
-    assert np.array_equal(ds.images[0], expected), "degradação deve ser a de src.common, aplicada no uint8"
-    assert torch.allclose(ds[0][0][0], torch.from_numpy(expected).float() / 255)
+    assert np.array_equal(ds.images, expected), "degradação deve ser a de src.common, aplicada no uint8"
+    assert not np.array_equal(ds.images, images)
+    assert torch.allclose(ds[0][0][0], torch.from_numpy(expected[0]).float() / 255)
     # Mesma semente -> mesmo ruído
     ds2 = D.FERDataset("test", mode="small", degradation=name, level=level, seed=42)
     assert np.array_equal(ds.images, ds2.images)
@@ -112,7 +113,7 @@ def test_balance_loss_and_sampler(fake_data, monkeypatch):
     images = np.zeros((140, 48, 48), np.uint8)
     labels = np.array([3] * 120 + list(range(7)) * 2 + [0] * 6)
     monkeypatch.setattr(fake_data, "load_fer2013",
-                        lambda s: (images, labels) if s == "train" else fake_fer2013(s))
+                        lambda s: (images, labels, np.arange(140)) if s == "train" else fake_fer2013(s))
 
     loss_l = D.make_loaders("small", batch_size=20, num_workers=0, balance="loss", splits=("train",))
     w = loss_l.class_weights
@@ -125,10 +126,8 @@ def test_balance_loss_and_sampler(fake_data, monkeypatch):
     assert (ys == 3).float().mean() < 0.5, "sampler deveria reduzir a classe majoritária (86% sem ele)"
 
 
-@pytest.mark.skipif(bool(STUBBED), reason="workers no Windows (spawn) reimportam src.common e não "
-                    "enxergam o stub; roda quando o src/common da Frente B existir")
 def test_workers_seeded(fake_data):
-    # Com src/common real os workers ainda carregam os arrays falsos já guardados no dataset.
+    # Os workers (spawn no Windows) recebem os arrays já guardados no dataset.
     loaders = D.make_loaders("small", batch_size=8, num_workers=2, splits=("train",), augment=True)
     x, y = next(iter(loaders.train))
     assert x.shape == (8, 1, 48, 48)
