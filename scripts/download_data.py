@@ -103,7 +103,9 @@ Dois passos manuais, feitos por uma pessoa e nunca pelo script:
   2. Gerar o token da API em https://www.kaggle.com/settings (seção API,
      "Create New Token") e salvar o kaggle.json baixado em
        {Path.home() / '.kaggle' / 'kaggle.json'}
-     ou definir as variáveis de ambiente KAGGLE_USERNAME e KAGGLE_KEY.
+     ou definir as variáveis de ambiente KAGGLE_USERNAME e KAGGLE_KEY
+     (tokens novos, no formato KGAT_..., vão na variável KAGGLE_API_TOKEN ou em
+     {Path.home() / '.kaggle' / 'access_token'}).
      Nunca cole o token no chat, no código ou no repositório (kaggle.json está no .gitignore).
 
 Depois rode de novo: python scripts/download_data.py
