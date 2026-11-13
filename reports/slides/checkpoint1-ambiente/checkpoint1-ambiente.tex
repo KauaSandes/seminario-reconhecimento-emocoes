@@ -44,14 +44,15 @@
 
     \begin{table}[]
         \centering
-        \renewcommand{\arraystretch}{1.3}
+        \small
+        \renewcommand{\arraystretch}{1.25}
         \setlength{\tabcolsep}{8pt}
         {\rowcolors{2}{}{LightGray!10}
-            \begin{tabular}{p{2.6cm}p{7.6cm}}
+            \begin{tabular}{>{\raggedright\arraybackslash}p{2.6cm}>{\raggedright\arraybackslash}p{7.6cm}}
                 \toprule
                 \textbf{Item}      & \textbf{Versão}                                        \\
                 \midrule
-                GPU                & RTX 5060, 8 GB, arquitetura Blackwell (sm\_120)        \\
+                GPU                & RTX 5060, 8 GB, Blackwell (sm\_120)                    \\
                 Driver             & NVIDIA 610.88                                          \\
                 Python             & 3.14.0, em ambiente virtual (\texttt{.venv})           \\
                 PyTorch            & 2.14.1 + torchvision 0.29.1                            \\
@@ -64,7 +65,7 @@
 
     \vspace{0.5em}
     \begin{block}{}
-        A série RTX 50 exige PyTorch com CUDA 12.8 ou mais novo: usamos CUDA 13.0.
+        A série RTX 50 exige CUDA 12.8 ou mais novo: usamos o 13.0.
     \end{block}
 
 \end{frame}
@@ -78,18 +79,18 @@
 
     \begin{table}[]
         \centering
-        \small
-        \renewcommand{\arraystretch}{1.2}
-        \setlength{\tabcolsep}{8pt}
+        \footnotesize
+        \renewcommand{\arraystretch}{1.25}
+        \setlength{\tabcolsep}{7pt}
         {\rowcolors{2}{}{LightGray!10}
-            \begin{tabular}{p{5.4cm}p{1cm}p{4.2cm}}
+            \begin{tabular}{>{\raggedright\arraybackslash}p{4.9cm}>{\centering\arraybackslash}p{0.7cm}>{\raggedright\arraybackslash}p{4.9cm}}
                 \toprule
                 \textbf{Teste}                          & \textbf{}  & \textbf{Detalhe}                        \\
                 \midrule
                 CUDA reconhece a placa (sm\_120)         & \ok        & kernels nativos para Blackwell          \\
-                matmul, convolução e FFT2: GPU = CPU     & \ok        & erro máximo de $5\times10^{-5}$         \\
-                CNN do zero 48$\times$48, seed 42        & \ok        & perda 2,28 $\rightarrow$ 0,006          \\
-                ResNet-18 do ImageNet, 224$\times$224    & \ok        & pesos baixados, treino com AMP          \\
+                matmul, convolução e FFT2                & \ok        & iguais à CPU (erro $\le 5\times10^{-5}$) \\
+                CNN do zero 48$\times$48, seed 42        & \ok        & perda 2,28 $\rightarrow$ 0,006, reprodutível \\
+                ResNet-18 do ImageNet, 224$\times$224    & \ok        & treino com precisão mista               \\
                 LSTM (vídeo do CK+)                      & \ok        & forward e backward                      \\
                 Grad-CAM                                 & \ok        & mapa 224$\times$224                     \\
                 OpenCV: Haar cascade e janela            & \ok        & pronto para a demo na webcam            \\
@@ -98,9 +99,6 @@
             \end{tabular}
         }
     \end{table}
-
-    \vspace{0.3em}
-    {\footnotesize Com seed 42, duas execuções do treino deram perdas idênticas.}
 
 \end{frame}
 
@@ -111,15 +109,16 @@
 
     \vspace{1.2cm}
     \begin{columns}[c]
-        \column{0.3\textwidth}  \stat{1330}{imagens/s no treino 224$\times$224}
+        \column{0.3\textwidth}  \stat{1330}{imagens/s no treino}
         \column{0.03\textwidth} \statsep
-        \column{0.3\textwidth}  \stat{1,7}{GB de VRAM no pico, de 8 GB}
+        \column{0.3\textwidth}  \stat{1,7}{GB de VRAM no pico}
         \column{0.03\textwidth} \statsep
-        \column{0.3\textwidth}  \stat{0,4}{min por época da FER-2013}
+        \column{0.3\textwidth}  \stat{0,4}{min por época}
     \end{columns}
 
     \vspace{1.2cm}
-    {\footnotesize Lote de 128 com precisão mista e dados sintéticos já na GPU. O carregamento dos dados reais vai reduzir esses números.}
+    {\footnotesize 224$\times$224, lote de 128, precisão mista. Época = 28.709 imagens da FER-2013.\\
+    Medido com dados sintéticos já na GPU: com os dados reais, será mais lento.}
 
 \end{frame}
 
@@ -127,33 +126,33 @@
 \setLayout{vertical}
 \begin{frame}{Problemas encontrados e resolvidos}
 
+    % Os blocos do tema começam com \vspace{\fill}: o \par depois de cada um
+    % faz o espaço livre se distribuir por igual entre eles.
     \begin{alertblock}{O OpenCV 5 removeu o Viola-Jones}
-        O \texttt{cv2.CascadeClassifier} não existe mais na versão 5.0.
-        Fixamos \texttt{opencv-python==4.14.0.94}.
-    \end{alertblock}
-    \vspace{0.8em}
+        O \texttt{cv2.CascadeClassifier} não existe na versão 5.0: fixamos o OpenCV 4.14.
+    \end{alertblock}\par
     \begin{alertblock}{O grad-cam quebra o \texttt{cv2}}
-        Ele instala o \texttt{opencv-python-headless}, que conflita com o \texttt{opencv-python}.
+        Ele instala o \texttt{opencv-python-headless}, que conflita com o \texttt{opencv-python}.\\
         Removemos o headless depois da instalação.
-    \end{alertblock}
-    \vspace{0.8em}
+    \end{alertblock}\par
     \begin{recommendationblock}{Para a frente B}
-        O Viola-Jones do CK+ depende do OpenCV 4: usar o mesmo \texttt{requirements.txt}.
-    \end{recommendationblock}
+        O Viola-Jones do CK+ precisa do OpenCV 4: usar o mesmo \texttt{requirements.txt}.
+    \end{recommendationblock}\par
+    \vspace{\fill}
 
 \end{frame}
 
 %--------------------------------------------------------
 \begin{frame}[fragile]{Como reproduzir o ambiente}
 
-    \begin{lstlisting}[language=bash, basicstyle=\scriptsize\ttfamily, breaklines=true]
+    \begin{lstlisting}[language=bash, basicstyle=\scriptsize\ttfamily, columns=fullflexible, keepspaces=true, breaklines=true]
 python -m venv .venv
 .venv\Scripts\activate
 pip install torch==2.14.1 torchvision==0.29.1 --index-url https://download.pytorch.org/whl/cu130
 pip install -r requirements.txt
 pip uninstall -y opencv-python-headless opencv-python
 pip install opencv-python==4.14.0.94
-    \end{lstlisting}
+\end{lstlisting}
 
     \vspace{0.3em}
     {\footnotesize Os passos e as versões testadas estão no \texttt{requirements.txt} do repositório.}
