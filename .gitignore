@@ -17,3 +17,6 @@ __pycache__/
 .ipynb_checkpoints/
 .venv/
 venv/
+
+# Pasta falsa do CK+ gerada pelos testes (tests/common/conftest.py)
+tests/fixtures/ckplus_fake/
