@@ -3,10 +3,9 @@
 As sequências vêm de ``src.common.data.load_ckplus(..., mode="sequence")``, já com o
 rosto recortado, sem "desprezo" e com rótulos na ordem da FER-2013.
 
-Suposição sobre a API da Frente B (ajustar em ``_load_sequences`` se mudar):
-    load_ckplus(fold, part, mode="sequence") -> (sequences, labels)
-        sequences: lista de arrays uint8 [n_quadros, H, W], do neutro ao pico
-        labels: int [N] em 0..6
+API usada: ``load_ckplus(fold, part, mode="sequence") -> (seqs, y, ids)``, com ``seqs``
+uma lista de arrays uint8 [T_i, 48, 48] do neutro ao pico, ``y`` int64 [N] e ``ids``
+strings ``"S005/001"``. Nesse modo não existe a classe neutro.
 """
 from __future__ import annotations
 
@@ -24,8 +23,8 @@ PARTS = ("train", "test")
 
 
 def _load_sequences(fold: int, part: str):
-    sequences, labels = common_data.load_ckplus(fold, part=part, mode="sequence")
-    return list(sequences), np.asarray(labels)
+    sequences, labels, ids = common_data.load_ckplus(fold, part=part, mode="sequence")
+    return list(sequences), np.asarray(labels), np.asarray(ids)
 
 
 def sample_frame_indices(n_frames: int, T: int) -> np.ndarray:
@@ -55,8 +54,9 @@ class CKSequenceDataset(Dataset):
             raise ValueError(f"part deve ser um de {PARTS}")
         if mode not in MODES:
             raise ValueError(f"mode deve ser um de {MODES}")
+        self.ids = None
         if sequences is None:
-            sequences, labels = _load_sequences(fold, part)
+            sequences, labels, self.ids = _load_sequences(fold, part)
         if len(sequences) != len(labels):
             raise ValueError("sequences e labels com tamanhos diferentes")
         self.fold, self.part, self.T = fold, part, T
@@ -88,7 +88,8 @@ def extract_features(backbone: torch.nn.Module, fold: int, model_name: str, T: i
     ``backbone`` deve devolver um vetor por imagem ([B, D]); para a ResNet-18, use
     ``model.fc = torch.nn.Identity()``. Arquivo salvo:
     ``<out_dir>/ck_features_<model_name>_fold<fold>.pt`` com
-    ``{"train": {"features": [N, T, D], "labels": [N]}, "test": {...}, "model", "T", "fold"}``.
+    ``{"train": {"features": [N, T, D], "labels": [N], "ids": [...]}, "test": {...},
+    "model", "T", "fold"}``.
     """
     device = torch.device(device)
     backbone = backbone.to(device).eval()
@@ -104,7 +105,8 @@ def extract_features(backbone: torch.nn.Module, fold: int, model_name: str, T: i
             f = backbone(x.flatten(0, 1).to(device))  # [B*T, D]
             feats.append(f.reshape(b, T, -1).float().cpu())
             labels.append(y)
-        out[part] = {"features": torch.cat(feats), "labels": torch.cat(labels)}
+        out[part] = {"features": torch.cat(feats), "labels": torch.cat(labels),
+                     "ids": None if ds.ids is None else ds.ids.tolist()}
 
     path = Path(out_dir) / f"ck_features_{model_name}_fold{fold}.pt"
     path.parent.mkdir(parents=True, exist_ok=True)

@@ -100,12 +100,16 @@ def run_smoke(mode: str = "small", n: int = 64, steps: int = 60, lr: float = 3e-
             "y_true": y.cpu().numpy(), "y_pred": pred.cpu().numpy(), "seed": seed}
 
 
-def save_smoke_json(result: dict, out_dir: str | Path = "results"):
-    """Valida a integração com o contrato gravando o JSON pelo src.common.metrics."""
-    return common_metrics.save_results(
-        method="smoke", track="cnn", dataset="fer2013", split="train", degradation="none", level=0,
-        y_true=result["y_true"], y_pred=result["y_pred"], train_time_s=result["train_time_s"],
-        inference_ms_per_img=result["inference_ms_per_img"], seed=result["seed"], out_dir=out_dir)
+def save_smoke_json(result: dict, out_dir: str | Path | None = None) -> Path:
+    """Valida a integração com o contrato gravando o JSON pelo src.common.metrics.
+
+    ``split="train"`` porque o lote fixo vem do treino (o teste não é tocado).
+    """
+    meta = {"method": "smoke", "track": "cnn", "dataset": "fer2013", "split": "train",
+            "degradation": "none", "level": 0, "train_time_s": result["train_time_s"],
+            "inference_ms_per_img": result["inference_ms_per_img"], "seed": result["seed"]}
+    record = common_metrics.evaluate(result["y_true"], result["y_pred"], meta)
+    return common_metrics.save_results(record, out_dir)
 
 
 def bench_loader(mode: str, workers: list[int], batch_size: int, n_batches: int, size: int | None,
@@ -138,6 +142,7 @@ def main() -> None:
     p.add_argument("--batch-size", type=int, default=64)
     p.add_argument("--bench-batches", type=int, default=50)
     p.add_argument("--no-json", action="store_true", help="não gravar o JSON de exemplo")
+    p.add_argument("--out-dir", default=None, help="pasta do JSON (padrão: results/)")
     args = p.parse_args()
     if hasattr(sys.stdout, "reconfigure"):
         sys.stdout.reconfigure(encoding="utf-8")
@@ -156,7 +161,7 @@ def main() -> None:
             print(f"| {nw} | {ips:.0f} |")
 
     if not args.no_json:
-        path = save_smoke_json(r)
+        path = save_smoke_json(r, args.out_dir)
         print(f"\nJSON de exemplo: {path}")
         if path and Path(path).is_file():
             print(json.dumps({k: v for k, v in json.loads(Path(path).read_text()).items()

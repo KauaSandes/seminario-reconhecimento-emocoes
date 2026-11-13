@@ -13,12 +13,10 @@ Ordem das operações em cada imagem (uint8, 48x48):
 O aumento roda em 48x48, antes do redimensionamento, para o padding de 4 px e a
 rotação valerem na resolução original (e ficar mais barato).
 
-Suposições sobre a API da Frente B (ajustar aqui se a assinatura publicada mudar):
-    load_fer2013(split) -> (images uint8 [N, 48, 48], labels int [N]),
-        split em {"train", "val", "test"}
-    class_weights(labels) -> array [7] com o peso de cada classe
-    add_gaussian_noise(img, sigma), gaussian_blur(img, ksize), downsample(img, size),
-        cada uma recebendo e devolvendo uma imagem uint8 2D
+API usada de ``src.common``:
+    data.load_fer2013(split) -> (X uint8 [N, 48, 48], y int64 [N], ids int64 [N])
+    clean.class_weights(y) -> float64 [7]
+    degrade.apply_degradation(X, kind, level, seed) com kind em degrade.KINDS
 """
 from __future__ import annotations
 
@@ -40,12 +38,6 @@ IMAGENET_STD = (0.229, 0.224, 0.225)
 MODES = ("small", "resnet")
 SPLITS = ("train", "val", "test")
 
-# Nome da degradação no JSON de resultados -> função de src.common.degrade.
-DEGRADATIONS: dict[str, str] = {
-    "noise": "add_gaussian_noise",   # nível = sigma (5, 10, 20)
-    "blur": "gaussian_blur",         # nível = ksize (3, 5, 7)
-    "resolution": "downsample",      # nível = tamanho intermediário (24, 12)
-}
 
 
 class RepeatChannels(torch.nn.Module):
@@ -84,20 +76,14 @@ def build_transform(mode: str, augment: bool, size: int | None = None) -> Callab
 
 def apply_degradation(images: np.ndarray, degradation: str | None, level: float | int | None,
                       seed: int = 42) -> np.ndarray:
-    """Aplica uma degradação de ``src.common.degrade`` a todas as imagens, uma vez.
+    """Degrada o conjunto inteiro com ``src.common.degrade.apply_degradation``, uma vez.
 
-    Feito antes das transformações e fora do ``__getitem__`` para o ruído ficar fixo
-    entre épocas e igual ao da Frente B com a mesma semente.
+    Feito no uint8, antes das transformações e fora do ``__getitem__``: o ruído fica fixo
+    entre épocas e sai idêntico ao da Frente B com a mesma semente.
     """
     if degradation in (None, "none"):
         return images
-    if degradation not in DEGRADATIONS:
-        raise ValueError(f"degradação desconhecida {degradation!r}; use uma de {list(DEGRADATIONS)}")
-    fn = getattr(common_degrade, DEGRADATIONS[degradation])
-    random.seed(seed)
-    np.random.seed(seed)
-    out = np.stack([np.asarray(fn(img, level)) for img in images])
-    return out.astype(np.uint8, copy=False)
+    return common_degrade.apply_degradation(images, degradation, level, seed=seed)
 
 
 class FERDataset(Dataset):
@@ -108,7 +94,8 @@ class FERDataset(Dataset):
         mode: "small" (1x48x48 em [0, 1]) ou "resnet" (3xSxS, normalização ImageNet).
         augment: espelhamento, rotação de ±10° e recorte com padding de 4 px. Só no treino.
         size: lado da entrada no modo "resnet" (224 padrão, 112 como opção).
-        degradation, level: degradação de teste (ver ``DEGRADATIONS``); "none" ou None desliga.
+        degradation, level: degradação de teste (``src.common.degrade.LEVELS``); "none" ou None
+            desliga.
         images, labels: arrays já carregados (evita carregar de novo); por padrão chama
             ``load_fer2013(split)``.
     """
@@ -123,7 +110,7 @@ class FERDataset(Dataset):
         if degradation not in (None, "none") and split != "test":
             raise ValueError("degradações só no teste (contrato, seção 5)")
         if images is None:
-            images, labels = common_data.load_fer2013(split)
+            images, labels, _ids = common_data.load_fer2013(split)
         images = np.asarray(images)
         labels = np.asarray(labels)
         if images.ndim != 3 or images.dtype != np.uint8:
