@@ -1,0 +1,17 @@
+data/
+checkpoints/
+*.pt
+__pycache__/
+.venv/
+
+# LaTeX (slides)
+*.aux
+*.log
+*.nav
+*.out
+*.snm
+*.toc
+*.vrb
+*.synctex.gz
+*.fls
+*.fdb_latexmk
