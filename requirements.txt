@@ -1,0 +1,16 @@
+# Ambiente testado em 2026-11-12: RTX 5060 (sm_120), driver 610.88, Windows 11, Python 3.14.0.
+# 1) PyTorch com CUDA (a série RTX 50 exige CUDA >= 12.8), pelo índice do PyTorch:
+#      pip install torch==2.14.1 torchvision==0.29.1 --index-url https://download.pytorch.org/whl/cu130
+# 2) pip install -r requirements.txt
+# 3) O grad-cam puxa opencv-python-headless, que conflita com o opencv-python e quebra o cv2. Depois de instalar:
+#      pip uninstall -y opencv-python-headless opencv-python && pip install opencv-python==4.14.0.94
+#    (o aviso do pip check sobre o headless pode ser ignorado: os dois fornecem o mesmo módulo cv2)
+opencv-python==4.14.0.94   # < 5: o OpenCV 5 removeu o cv2.CascadeClassifier (Viola-Jones)
+scikit-image==0.26.0
+scikit-learn==1.9.1
+scipy==1.18.1
+numpy==2.5.4
+pandas==3.1.1
+matplotlib==3.11.2
+grad-cam==1.5.7    # pacote pytorch-grad-cam (import pytorch_grad_cam)
+tqdm==4.70.1

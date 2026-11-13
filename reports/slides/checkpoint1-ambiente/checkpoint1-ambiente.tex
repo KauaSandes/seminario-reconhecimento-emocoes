@@ -1,0 +1,207 @@
+% Checkpoint 1 da frente A: ambiente PyTorch na RTX 5060.
+% Template: UFGTeX-Presentation (github.com/deuslirio/UFGTeX-Presentation, commit 53a0565).
+% Compilar nesta pasta: pdflatex checkpoint1-ambiente.tex (duas vezes, por causa da numeração).
+\documentclass[aspectratio=169,t,xcolor=table]{beamer}
+\usepackage[utf8]{inputenc}
+\usepackage[brazil]{babel}
+\usepackage{booktabs}
+\usepackage{listings}
+
+\usetheme{Ufg}
+\usetikzlibrary{positioning}
+
+% Uma cor só para todas as transições de seção.
+\AtBeginSection[]{%
+    \setLayout{mainpoint}%
+    \setBGColor{\currentsectioncolor}%
+    \begin{frame}[noframenumbering]{}%
+        \frametitle{\insertsectionhead}%
+    \end{frame}%
+    \setLayout{vertical}%
+}
+
+\setPrimaryColor{UFGBlue}
+\setLogos{lib/logos/INF-compact-white.png}{lib/logos/INF-compact-white.png}
+
+\newcommand{\ok}{\textcolor{DarkGreen}{\textbf{OK}}}
+
+\begin{document}
+
+\title[Checkpoint 1]{Checkpoint 1:\\ambiente da frente A na GPU}
+\subtitle{Reconhecimento de emoções em imagens faciais — INF0413}
+\author{Kauã L. Sandes}
+\institute[UFG]{Instituto de Informática\\Universidade Federal de Goiás}
+\date{13 de novembro de 2026}
+
+\frame[noframenumbering]{\titlepage}
+
+%==========================================================
+\section[INFBlue]{Ambiente instalado}
+
+%--------------------------------------------------------
+\setLayout{vertical}
+\begin{frame}{Hardware e software}
+
+    \begin{table}[]
+        \centering
+        \renewcommand{\arraystretch}{1.3}
+        \setlength{\tabcolsep}{8pt}
+        {\rowcolors{2}{}{LightGray!10}
+            \begin{tabular}{p{2.6cm}p{7.6cm}}
+                \toprule
+                \textbf{Item}      & \textbf{Versão}                                        \\
+                \midrule
+                GPU                & RTX 5060, 8 GB, arquitetura Blackwell (sm\_120)        \\
+                Driver             & NVIDIA 610.88                                          \\
+                Python             & 3.14.0, em ambiente virtual (\texttt{.venv})           \\
+                PyTorch            & 2.14.1 + torchvision 0.29.1                            \\
+                CUDA / cuDNN       & 13.0 / 9.24                                            \\
+                Bibliotecas        & OpenCV 4.14, scikit-image, scikit-learn, grad-cam      \\
+                \bottomrule
+            \end{tabular}
+        }
+    \end{table}
+
+    \vspace{0.5em}
+    \begin{block}{}
+        A série RTX 50 exige PyTorch com CUDA 12.8 ou mais novo: usamos CUDA 13.0.
+    \end{block}
+
+\end{frame}
+
+%==========================================================
+\section[INFBlue]{Validação na GPU}
+
+%--------------------------------------------------------
+\setLayout{vertical}
+\begin{frame}{8 testes, 8 aprovados}
+
+    \begin{table}[]
+        \centering
+        \small
+        \renewcommand{\arraystretch}{1.2}
+        \setlength{\tabcolsep}{8pt}
+        {\rowcolors{2}{}{LightGray!10}
+            \begin{tabular}{p{5.4cm}p{1cm}p{4.2cm}}
+                \toprule
+                \textbf{Teste}                          & \textbf{}  & \textbf{Detalhe}                        \\
+                \midrule
+                CUDA reconhece a placa (sm\_120)         & \ok        & kernels nativos para Blackwell          \\
+                matmul, convolução e FFT2: GPU = CPU     & \ok        & erro máximo de $5\times10^{-5}$         \\
+                CNN do zero 48$\times$48, seed 42        & \ok        & perda 2,28 $\rightarrow$ 0,006          \\
+                ResNet-18 do ImageNet, 224$\times$224    & \ok        & pesos baixados, treino com AMP          \\
+                LSTM (vídeo do CK+)                      & \ok        & forward e backward                      \\
+                Grad-CAM                                 & \ok        & mapa 224$\times$224                     \\
+                OpenCV: Haar cascade e janela            & \ok        & pronto para a demo na webcam            \\
+                Bibliotecas da frente B                  & \ok        & Gabor, HOG, LBP, DCT, SVM               \\
+                \bottomrule
+            \end{tabular}
+        }
+    \end{table}
+
+    \vspace{0.3em}
+    {\footnotesize Com seed 42, duas execuções do treino deram perdas idênticas.}
+
+\end{frame}
+
+%--------------------------------------------------------
+\setLayout{blank}
+\setBGColor{UFGBlue}
+\begin{frame}{Desempenho da ResNet-18 na RTX 5060}
+
+    \vspace{1.2cm}
+    \begin{columns}[c]
+        \column{0.3\textwidth}  \stat{1330}{imagens/s no treino 224$\times$224}
+        \column{0.03\textwidth} \statsep
+        \column{0.3\textwidth}  \stat{1,7}{GB de VRAM no pico, de 8 GB}
+        \column{0.03\textwidth} \statsep
+        \column{0.3\textwidth}  \stat{0,4}{min por época da FER-2013}
+    \end{columns}
+
+    \vspace{1.2cm}
+    {\footnotesize Lote de 128 com precisão mista e dados sintéticos já na GPU. O carregamento dos dados reais vai reduzir esses números.}
+
+\end{frame}
+
+%--------------------------------------------------------
+\setLayout{vertical}
+\begin{frame}{Problemas encontrados e resolvidos}
+
+    \begin{alertblock}{O OpenCV 5 removeu o Viola-Jones}
+        O \texttt{cv2.CascadeClassifier} não existe mais na versão 5.0.
+        Fixamos \texttt{opencv-python==4.14.0.94}.
+    \end{alertblock}
+    \vspace{0.8em}
+    \begin{alertblock}{O grad-cam quebra o \texttt{cv2}}
+        Ele instala o \texttt{opencv-python-headless}, que conflita com o \texttt{opencv-python}.
+        Removemos o headless depois da instalação.
+    \end{alertblock}
+    \vspace{0.8em}
+    \begin{recommendationblock}{Para a frente B}
+        O Viola-Jones do CK+ depende do OpenCV 4: usar o mesmo \texttt{requirements.txt}.
+    \end{recommendationblock}
+
+\end{frame}
+
+%--------------------------------------------------------
+\begin{frame}[fragile]{Como reproduzir o ambiente}
+
+    \begin{lstlisting}[language=bash, basicstyle=\scriptsize\ttfamily, breaklines=true]
+python -m venv .venv
+.venv\Scripts\activate
+pip install torch==2.14.1 torchvision==0.29.1 --index-url https://download.pytorch.org/whl/cu130
+pip install -r requirements.txt
+pip uninstall -y opencv-python-headless opencv-python
+pip install opencv-python==4.14.0.94
+    \end{lstlisting}
+
+    \vspace{0.3em}
+    {\footnotesize Os passos e as versões testadas estão no \texttt{requirements.txt} do repositório.}
+
+\end{frame}
+
+%==========================================================
+\section[INFBlue]{Próximos passos}
+
+%--------------------------------------------------------
+\setLayout{vertical}
+\begin{frame}{Semana 2 (13 a 19/11)}
+
+    \begin{itemize}
+        \item Treinar a CNN do zero na FER-2013
+        \item Treinar a ResNet-18 com transfer learning
+        \item Usar \texttt{load\_fer2013} e \texttt{metrics.py} da base comum (frente B)
+        \item Gravar os JSONs de métricas em \texttt{results/}, com seed 42
+        \item Repetir os testes na máquina do Antonio (reserva: Colab ou Kaggle)
+    \end{itemize}
+
+    \vspace{0.8em}
+    \begin{block}{Status}
+        O ambiente da frente A está pronto para treinar.
+    \end{block}
+
+\end{frame}
+
+%==========================================================
+\setLayout{blank}
+\setBGColor{UFGBlue}
+\begin{frame}
+
+    \centering
+    \vspace{2cm}
+
+    \textbf{\Huge Obrigado}
+
+    \ \\
+
+    \textbf{Dúvidas e sugestões}
+
+    \vspace{1cm}
+    \begin{figure}
+        \centering
+        \includegraphics[height=3cm]{lib/logos/INF-full-white.png}
+    \end{figure}
+
+\end{frame}
+
+\end{document}
