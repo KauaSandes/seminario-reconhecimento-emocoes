@@ -21,3 +21,4 @@ venv/
 # Pasta falsa do CK+ gerada pelos testes (tests/common/conftest.py)
 tests/fixtures/ckplus_fake/
 reports/slides/checkpoint2-dados/pptx_build/
+reports/slides/checkpoint1-exemplos/build/
