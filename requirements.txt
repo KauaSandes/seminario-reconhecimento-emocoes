@@ -21,3 +21,4 @@ tqdm==4.70.1
 kaggle             # download oficial da FER-2013 (scripts/download_data.py)
 six                # o kaggle 2.2.x importa o six mas não o declara como dependência
 pytest
+pymupdf            # gera o PDF dos slides sem LaTeX (reports/slides/checkpoint2-dados/build_pdf.py)
