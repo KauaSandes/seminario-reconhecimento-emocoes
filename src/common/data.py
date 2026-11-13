@@ -28,6 +28,8 @@ from typing import Literal
 import numpy as np
 import pandas as pd
 
+from src.common.utils import detect_faces
+
 # ------------------------------------------------------------------ constantes
 #: Ordem oficial dos rótulos (a mesma da FER-2013). Não mudar.
 EMOTIONS: tuple[str, ...] = ("raiva", "nojo", "medo", "alegria", "tristeza", "surpresa", "neutro")
@@ -280,7 +282,128 @@ def build_ckplus_cache(raw_dir: Path | str | None = None, cache_path: Path | str
     Returns:
         Caminho do cache (padrão ``data/processed/ckplus.npz``).
     """
-    raise NotImplementedError
+    cache = Path(cache_path) if cache_path is not None else CKPLUS_CACHE
+    if cache.is_file() and not force:
+        return cache
+    root = Path(raw_dir) if raw_dir is not None else CKPLUS_RAW_DIR
+    dirs = find_ckplus_dirs(root)
+    if dirs is None:
+        raise FileNotFoundError(
+            f"CK+ não encontrado em {root} (faltam cohn-kanade-images/ e Emotion/). O acesso é pedido aos "
+            f"autores; quando os zips chegarem, coloque em data/raw/ckplus/ e rode "
+            f"python scripts/download_data.py --only ckplus. Veja data/raw/ckplus/LEIA-ME.txt.")
+    images_dir, emotion_dir = dirs
+
+    frames_all: list[np.ndarray] = []
+    offsets = [0]
+    labels: list[int] = []
+    subjects: list[str] = []
+    sequences: list[str] = []
+    detected: list[bool] = []
+    boxes: list[tuple[int, int, int, int]] = []
+    skipped = {"desprezo": 0, "rótulo desconhecido": 0, "sem quadros": 0}
+
+    label_files = sorted(p for p in emotion_dir.rglob("*_emotion.txt") if not p.name.startswith("."))
+    seen: set[tuple[str, str]] = set()
+    for label_file in label_files:
+        subject, seq = label_file.parent.parent.name, label_file.parent.name
+        if (subject, seq) in seen:  # mais de um arquivo de rótulo na mesma sequência: fica o primeiro
+            continue
+        seen.add((subject, seq))
+        ck_label = int(round(float(label_file.read_text().split()[0])))
+        if ck_label == CKPLUS_CONTEMPT:
+            skipped["desprezo"] += 1
+            continue
+        if ck_label not in CKPLUS_TO_FER:
+            skipped["rótulo desconhecido"] += 1
+            continue
+        frame_paths = _ckplus_frame_paths(images_dir / subject / seq)
+        if not frame_paths:
+            skipped["sem quadros"] += 1
+            continue
+        raw = [_read_gray(p) for p in frame_paths]
+        box, ok = _face_box(raw[0])
+        frames_all.append(np.stack([_crop_resize(f, box) for f in raw]))
+        offsets.append(offsets[-1] + len(raw))
+        labels.append(CKPLUS_TO_FER[ck_label])
+        subjects.append(subject)
+        sequences.append(seq)
+        detected.append(ok)
+        boxes.append(box)
+
+    if not labels:
+        raise ValueError(f"nenhuma sequência rotulada utilizável em {emotion_dir} (descartadas: {skipped})")
+    cache.parent.mkdir(parents=True, exist_ok=True)
+    tmp = cache.with_name(cache.name + ".part")
+    with open(tmp, "wb") as f:
+        np.savez(f, frames=np.concatenate(frames_all), offsets=np.asarray(offsets, np.int64),
+                 labels=np.asarray(labels, np.int64), subjects=np.asarray(subjects, dtype="<U16"),
+                 sequences=np.asarray(sequences, dtype="<U16"), face_detected=np.asarray(detected),
+                 boxes=np.asarray(boxes, np.int64),
+                 skipped=np.asarray([skipped[k] for k in skipped], np.int64),
+                 skipped_keys=np.asarray(list(skipped), dtype="<U32"))
+    tmp.replace(cache)
+    return cache
+
+
+def _ckplus_frame_paths(seq_dir: Path) -> list[Path]:
+    if not seq_dir.is_dir():
+        return []
+    return sorted(p for p in seq_dir.iterdir()
+                  if p.suffix.lower() == ".png" and not p.name.startswith("."))
+
+
+def _read_gray(path: Path) -> np.ndarray:
+    """Lê uma imagem em cinza uint8. Usa ``imdecode`` para funcionar com caminhos não ASCII no Windows."""
+    import cv2
+
+    img = cv2.imdecode(np.fromfile(str(path), dtype=np.uint8), cv2.IMREAD_UNCHANGED)
+    if img is None:
+        raise ValueError(f"não consegui ler {path}")
+    if img.ndim == 3:
+        img = cv2.cvtColor(img, cv2.COLOR_BGRA2GRAY if img.shape[2] == 4 else cv2.COLOR_BGR2GRAY)
+    if img.dtype != np.uint8:  # por segurança: imagens de 16 bits viram 8 bits
+        img = (img.astype(np.float64) * 255.0 / max(int(img.max()), 1)).round().astype(np.uint8)
+    return img
+
+
+def _face_box(gray: np.ndarray) -> tuple[tuple[int, int, int, int], bool]:
+    """Maior rosto do Viola-Jones como (x, y, w, h). Sem rosto, devolve o quadrado central e ``False``."""
+    h, w = gray.shape
+    side_min = max(min(h, w) // 5, 20)
+    faces = detect_faces(gray, scale_factor=1.1, min_neighbors=5, min_size=(side_min, side_min))
+    if len(faces):
+        x, y, fw, fh = (int(v) for v in faces[np.argmax(faces[:, 2] * faces[:, 3])])
+        return (x, y, fw, fh), True
+    side = min(h, w)
+    return ((w - side) // 2, (h - side) // 2, side, side), False
+
+
+def _crop_resize(gray: np.ndarray, box: tuple[int, int, int, int], size: int = IMG_SIZE) -> np.ndarray:
+    import cv2
+
+    x, y, w, h = box
+    H, W = gray.shape
+    x0, y0 = max(x, 0), max(y, 0)
+    x1, y1 = min(x + w, W), min(y + h, H)
+    crop = gray[y0:y1, x0:x1]
+    if crop.size == 0:
+        raise ValueError(f"caixa {box} fora da imagem {gray.shape}")
+    return cv2.resize(crop, (size, size), interpolation=cv2.INTER_AREA)
+
+
+def _load_ckplus_cache(cache_path: Path) -> dict[str, np.ndarray]:
+    with np.load(cache_path, allow_pickle=False) as z:
+        return {k: z[k] for k in z.files}
+
+
+def read_ckplus_folds(folds_csv: Path | str | None = None) -> pd.DataFrame:
+    """Lê ``splits/ckplus_folds.csv`` (``subject, sequence, label, fold``)."""
+    path = Path(folds_csv) if folds_csv is not None else CKPLUS_FOLDS_CSV
+    if not path.is_file():
+        raise FileNotFoundError(f"{path} não existe. Rode: python -m src.common.prepare_data "
+                                f"(depois de colocar o CK+ em data/raw/ckplus/)")
+    return pd.read_csv(path, dtype={"subject": str, "sequence": str, "label": np.int64, "fold": np.int64})
 
 
 def make_ckplus_folds(cache_path: Path | str | None = None, folds_csv: Path | str | None = None,
@@ -289,9 +412,28 @@ def make_ckplus_folds(cache_path: Path | str | None = None, folds_csv: Path | st
 
     Uma linha por sequência, com as colunas ``subject, sequence, label, fold``. A
     sequência faz parte do teste no fold ``fold`` e do treino nos outros. A mesma pessoa
-    (``Sxxx``) nunca aparece no treino e no teste do mesmo fold.
+    (``Sxxx``) nunca aparece no treino e no teste do mesmo fold. O ``label`` já está na
+    ordem da FER-2013. O ``GroupKFold`` sem embaralhamento é determinístico.
     """
-    raise NotImplementedError
+    from sklearn.model_selection import GroupKFold
+
+    cache = Path(cache_path) if cache_path is not None else CKPLUS_CACHE
+    if not cache.is_file():
+        raise FileNotFoundError(f"{cache} não existe; rode build_ckplus_cache() antes")
+    c = _load_ckplus_cache(cache)
+    subjects, labels = c["subjects"], c["labels"]
+    n_subjects = len(np.unique(subjects))
+    if n_subjects < n_splits:
+        raise ValueError(f"só {n_subjects} pessoas para {n_splits} folds")
+    fold = np.full(len(labels), -1, dtype=np.int64)
+    for k, (_, test_idx) in enumerate(GroupKFold(n_splits=n_splits).split(np.zeros(len(labels)), labels, subjects)):
+        fold[test_idx] = k
+    df = pd.DataFrame({"subject": subjects, "sequence": c["sequences"], "label": labels, "fold": fold})
+    df = df.sort_values(["subject", "sequence"]).reset_index(drop=True)
+    path = Path(folds_csv) if folds_csv is not None else CKPLUS_FOLDS_CSV
+    path.parent.mkdir(parents=True, exist_ok=True)
+    df.to_csv(path, index=False, lineterminator="\n")
+    return path
 
 
 def load_ckplus(fold: int, part: Part = "train", mode: Mode = "image", *,
@@ -316,5 +458,39 @@ def load_ckplus(fold: int, part: Part = "train", mode: Mode = "image", *,
         [T_i, 48, 48] no modo ``"sequence"``. ``y`` é int64 [N] na ordem de
         ``EMOTIONS``. ``ids`` são strings ``"S005/001/peak"`` ou ``"S005/001/neutral"``
         (modo image) e ``"S005/001"`` (modo sequence).
+
+    Raises:
+        FileNotFoundError: se o CK+ ainda não estiver em ``data/raw/ckplus/`` ou se
+            ``splits/ckplus_folds.csv`` não existir.
     """
-    raise NotImplementedError
+    if part not in ("train", "test"):
+        raise ValueError(f"part deve ser 'train' ou 'test', não {part!r}")
+    if mode not in ("image", "sequence"):
+        raise ValueError(f"mode deve ser 'image' ou 'sequence', não {mode!r}")
+    cache = build_ckplus_cache(raw_dir, cache_path)  # só monta se o cache ainda não existir
+    c = _load_ckplus_cache(cache)
+    folds = read_ckplus_folds(folds_csv)
+    n_folds = int(folds["fold"].max()) + 1
+    if not 0 <= fold < n_folds:
+        raise ValueError(f"fold deve estar em 0..{n_folds - 1}, não {fold}")
+
+    keys = np.char.add(np.char.add(c["subjects"], "/"), c["sequences"])
+    fold_of = dict(zip(folds["subject"] + "/" + folds["sequence"], folds["fold"]))
+    if set(fold_of) != set(keys.tolist()):
+        raise ValueError("splits/ckplus_folds.csv não corresponde ao cache do CK+ (sequências diferentes). "
+                         "Rode python -m src.common.prepare_data --force.")
+    seq_fold = np.array([fold_of[k] for k in keys], dtype=np.int64)
+    selected = np.flatnonzero((seq_fold == fold) == (part == "test"))
+
+    frames, offsets, labels = c["frames"], c["offsets"], c["labels"]
+    if mode == "sequence":
+        seqs = [frames[offsets[i]:offsets[i + 1]].copy() for i in selected]
+        return seqs, labels[selected].astype(np.int64), keys[selected].astype(object)
+
+    X = np.empty((2 * len(selected), IMG_SIZE, IMG_SIZE), dtype=np.uint8)
+    y = np.empty(2 * len(selected), dtype=np.int64)
+    ids = np.empty(2 * len(selected), dtype=object)
+    for j, i in enumerate(selected):
+        X[2 * j], y[2 * j], ids[2 * j] = frames[offsets[i + 1] - 1], labels[i], f"{keys[i]}/peak"
+        X[2 * j + 1], y[2 * j + 1], ids[2 * j + 1] = frames[offsets[i]], NEUTRAL, f"{keys[i]}/neutral"
+    return X, y, ids
