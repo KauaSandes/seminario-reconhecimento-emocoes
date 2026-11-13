@@ -308,7 +308,10 @@ def write_report(df: pd.DataFrame, path: Path | str | None = None, *, std_thresh
     weights_table = pd.DataFrame({"classe": classes, "peso": [f"{w:.3f}" for w in weights]})
 
     n_groups = int(df.loc[df.duplicated("md5", keep=False), "md5"].nunique()) if "md5" in df else 0
-    grid_rel = Path(grid_path).resolve().relative_to(REPO_ROOT).as_posix() if grid_path else None
+    grid_rel = None
+    if grid_path:
+        grid_abs = Path(grid_path).resolve()
+        grid_rel = (grid_abs.relative_to(REPO_ROOT) if grid_abs.is_relative_to(REPO_ROOT) else grid_abs).as_posix()
     no_face_total = int(df["reason"].str.contains("flag:no_face").sum())
     text = f"""# Limpeza da FER-2013
 

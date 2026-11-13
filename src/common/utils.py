@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import functools
+import hashlib
 import os
 import random
 import sys
@@ -31,6 +32,15 @@ def set_seed(seed: int = DEFAULT_SEED, deterministic: bool = True) -> None:
     if deterministic:
         torch.backends.cudnn.deterministic = True
         torch.backends.cudnn.benchmark = False
+
+
+def sha256_file(path: Path | str, chunk: int = 1 << 20) -> str:
+    """SHA-256 (hex) de um arquivo, lido em blocos."""
+    h = hashlib.sha256()
+    with open(path, "rb") as f:
+        while block := f.read(chunk):
+            h.update(block)
+    return h.hexdigest()
 
 
 @functools.lru_cache(maxsize=4)

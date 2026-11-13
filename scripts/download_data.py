@@ -24,7 +24,6 @@ CK+
 from __future__ import annotations
 
 import argparse
-import hashlib
 import io
 import os
 import re
@@ -48,7 +47,7 @@ from src.common.data import (  # noqa: E402
     find_ckplus_dirs,
     read_fer2013_csv,
 )
-from src.common.utils import ensure_utf8_stdio  # noqa: E402
+from src.common.utils import ensure_utf8_stdio, sha256_file  # noqa: E402
 
 COMPETITION = "challenges-in-representation-learning-facial-expression-recognition-challenge"
 COMPETITION_URL = f"https://www.kaggle.com/c/{COMPETITION}"
@@ -93,14 +92,6 @@ class DownloadError(RuntimeError):
 
 
 # ------------------------------------------------------------------ utilidades
-def sha256_file(path: Path, chunk: int = 1 << 20) -> str:
-    h = hashlib.sha256()
-    with open(path, "rb") as f:
-        while block := f.read(chunk):
-            h.update(block)
-    return h.hexdigest()
-
-
 def kaggle_help_message(reason: str) -> str:
     return f"""
 [FER-2013] {reason}
