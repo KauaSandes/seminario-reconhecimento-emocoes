@@ -71,7 +71,13 @@ pytest                                  # testes da base comum (não precisam do
   - Depois valida 35.887 linhas, 3 colunas, 2.304 pixels por linha e 28.709 / 3.589 / 3.589 por `Usage`, e grava o SHA-256 em `data/raw/fer2013/CHECKSUM.txt`.
 - **`python -m src.common.prepare_data`** aceita as opções `--std-threshold <valor>` (limiar de imagem quase constante, 5 por padrão), `--skip-face-check` (pula o Viola-Jones de sinalização, que é mais lento) e `--force` (refaz os caches).
 
-**Conferência entre máquinas.** O SHA-256 esperado do `fer2013.csv` é `pendente (preenchido após o primeiro download)`. O script compara o hash sozinho e avisa se ele for diferente.
+**Conferência entre máquinas.** O SHA-256 esperado do `fer2013.csv` (extraído do `fer2013.tar.gz` oficial, 301.072.766 bytes) é
+
+```
+3b8d9617d1017f34733c8f2474d7784c563ce86c40a86ac12c2d37cc968f871b
+```
+
+O script compara o hash sozinho e avisa se ele for diferente. Também dá para conferir à mão com `certutil -hashfile data\raw\fer2013\fer2013.csv SHA256` (Windows) ou `sha256sum data/raw/fer2013/fer2013.csv` (Linux/macOS).
 
 > **Não use** as versões da FER-2013 em pastas de imagens (como a `msambare/fer2013` do Kaggle), porque elas perderam a divisão PublicTest/PrivateTest de que o projeto precisa. Se o download oficial falhar, avise a equipe em vez de trocar de fonte.
 

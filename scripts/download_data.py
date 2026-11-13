@@ -51,9 +51,9 @@ from src.common.utils import ensure_utf8_stdio, sha256_file  # noqa: E402
 
 COMPETITION = "challenges-in-representation-learning-facial-expression-recognition-challenge"
 COMPETITION_URL = f"https://www.kaggle.com/c/{COMPETITION}"
-#: SHA-256 do fer2013.csv obtido da competição oficial, preenchido após o primeiro download.
-#: Se for ``None``, o hash só é gravado e não é comparado.
-EXPECTED_SHA256: str | None = None
+#: SHA-256 do fer2013.csv extraído do fer2013.tar.gz da competição oficial (primeiro download,
+#: 13/11/2026). Com ``None``, o hash só seria gravado e não comparado.
+EXPECTED_SHA256: str | None = "3b8d9617d1017f34733c8f2474d7784c563ce86c40a86ac12c2d37cc968f871b"
 #: Saída do kaggle que indica token inválido ou regras não aceitas.
 AUTH_ERROR = re.compile(r"\b(401|403)\b|unauthori[sz]ed|forbidden", re.IGNORECASE)
 
