@@ -1,9 +1,11 @@
 """Utilidades pequenas que as duas frentes compartilham."""
 from __future__ import annotations
 
+import functools
 import os
 import random
 import sys
+from pathlib import Path
 
 import numpy as np
 
@@ -29,6 +31,25 @@ def set_seed(seed: int = DEFAULT_SEED, deterministic: bool = True) -> None:
     if deterministic:
         torch.backends.cudnn.deterministic = True
         torch.backends.cudnn.benchmark = False
+
+
+@functools.lru_cache(maxsize=4)
+def load_face_cascade(name: str = "haarcascade_frontalface_default.xml"):
+    """Carrega (uma vez) um Haar cascade do OpenCV para o Viola-Jones."""
+    import cv2
+
+    cascade = cv2.CascadeClassifier(str(Path(cv2.data.haarcascades) / name))
+    if cascade.empty():
+        raise RuntimeError(f"não consegui carregar o cascade {name} de {cv2.data.haarcascades}")
+    return cascade
+
+
+def detect_faces(gray: np.ndarray, *, scale_factor: float = 1.1, min_neighbors: int = 5,
+                 min_size: tuple[int, int] = (30, 30)) -> np.ndarray:
+    """Viola-Jones numa imagem uint8 em cinza. Devolve as caixas int [k, 4] (x, y, w, h)."""
+    faces = load_face_cascade().detectMultiScale(gray, scaleFactor=scale_factor, minNeighbors=min_neighbors,
+                                                 minSize=min_size)
+    return np.asarray(faces, dtype=np.int64).reshape(-1, 4)
 
 
 def ensure_utf8_stdio() -> None:
