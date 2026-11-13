@@ -150,7 +150,47 @@ def fer2013_arrays(csv_path: Path | str | None = None, cache_path: Path | str | 
         ``X`` (uint8 [N, 48, 48]), ``y`` (int64 [N]), ``split`` (str [N], em
         ``SPLITS``) e ``ids`` (int64 [N], índice da linha no CSV original).
     """
-    raise NotImplementedError
+    csv = Path(csv_path) if csv_path is not None else FER2013_CSV
+    cache = Path(cache_path) if cache_path is not None else FER2013_CACHE
+    if not csv.is_file():
+        raise FileNotFoundError(f"{csv} não existe. Rode primeiro: python scripts/download_data.py")
+    st = csv.stat()
+    stamp = np.array([st.st_size, st.st_mtime_ns], dtype=np.int64)
+    keys = ("X", "y", "split", "ids")
+
+    if cache.is_file() and not force:
+        with np.load(cache, allow_pickle=False) as z:
+            if "source_stamp" in z and np.array_equal(z["source_stamp"], stamp):
+                return {k: z[k] for k in keys}
+
+    # A estrutura é validada aqui. As contagens oficiais são conferidas pelo download e pelo prepare_data.
+    df, X = read_fer2013_csv(csv, expected_sizes=None)
+    out = {
+        "X": X,
+        "y": df["emotion"].to_numpy(np.int64),
+        "split": df["Usage"].map(USAGE_TO_SPLIT).to_numpy().astype("<U5"),
+        "ids": np.arange(len(df), dtype=np.int64),
+    }
+    cache.parent.mkdir(parents=True, exist_ok=True)
+    tmp = cache.with_name(cache.name + ".part")
+    with open(tmp, "wb") as f:
+        np.savez(f, source_stamp=stamp, **out)
+    tmp.replace(cache)
+    return out
+
+
+def read_clean_csv(splits_csv: Path | str | None = None) -> pd.DataFrame:
+    """Lê ``splits/fer2013_clean.csv`` (colunas ``id, split, label, keep, reason``)."""
+    path = Path(splits_csv) if splits_csv is not None else FER2013_CLEAN_CSV
+    if not path.is_file():
+        raise FileNotFoundError(f"{path} não existe. Rode: python -m src.common.prepare_data "
+                                f"(ou use load_fer2013(split, clean=False) para os dados sem limpeza)")
+    df = pd.read_csv(path, dtype={"id": np.int64, "split": str, "label": np.int64, "keep": bool, "reason": str},
+                     keep_default_na=False)
+    missing = {"id", "split", "label", "keep", "reason"} - set(df.columns)
+    if missing:
+        raise ValueError(f"{path}: faltam as colunas {sorted(missing)}")
+    return df
 
 
 def load_fer2013(split: Split, clean: bool = True, *, csv_path: Path | str | None = None,
@@ -174,8 +214,22 @@ def load_fer2013(split: Split, clean: bool = True, *, csv_path: Path | str | Non
         FileNotFoundError: se o CSV não existir (rode ``python scripts/download_data.py``)
             ou, com ``clean=True``, se ``splits/fer2013_clean.csv`` não existir
             (rode ``python -m src.common.prepare_data``).
+        ValueError: se o arquivo de limpeza não corresponder ao CSV (outra versão dos dados).
     """
-    raise NotImplementedError
+    if split not in SPLITS:
+        raise ValueError(f"split deve ser um de {SPLITS}, não {split!r}")
+    arr = fer2013_arrays(csv_path, cache_path)
+    mask = arr["split"] == split
+    if clean:
+        decision = read_clean_csv(splits_csv).sort_values("id")
+        ids_ok = len(decision) == len(arr["ids"]) and np.array_equal(decision["id"].to_numpy(), arr["ids"])
+        if not ids_ok or not np.array_equal(decision["label"].to_numpy(), arr["y"]) \
+                or not np.array_equal(decision["split"].to_numpy(), arr["split"]):
+            raise ValueError("splits/fer2013_clean.csv não corresponde ao fer2013.csv desta máquina "
+                             "(ids, rótulos ou splits diferentes). Confira o SHA-256 em "
+                             "data/raw/fer2013/CHECKSUM.txt e rode python -m src.common.prepare_data.")
+        mask &= decision["keep"].to_numpy(bool)
+    return arr["X"][mask], arr["y"][mask], arr["ids"][mask]
 
 
 # ------------------------------------------------------------------------- CK+
