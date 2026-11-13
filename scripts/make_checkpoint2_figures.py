@@ -86,7 +86,7 @@ def removals_by_reason(decision: pd.DataFrame) -> None:
     counts = reasons.value_counts().reindex(list(labels), fill_value=0)
     order = counts.sort_values().index
 
-    fig, ax = plt.subplots(figsize=(6.4, 2.9))
+    fig, ax = plt.subplots(figsize=(5.0, 2.3))
     y = np.arange(len(order))
     ax.barh(y, counts[order], color=BLUE, height=0.55)
     for yi, key in zip(y, order):
@@ -110,7 +110,7 @@ def class_distribution(decision: pd.DataFrame) -> None:
     after = train.loc[train["keep"], "label"].value_counts(normalize=True).reindex(range(7), fill_value=0) * 100
     n_before, n_after = len(train), int(train["keep"].sum())
 
-    fig, ax = plt.subplots(figsize=(6.6, 3.0))
+    fig, ax = plt.subplots(figsize=(5.2, 2.3))
     x = np.arange(7)
     w = 0.38
     ax.bar(x - w / 2 - 0.01, before, w, color=ORANGE, label=f"treino antes ({_fmt(n_before)})")
@@ -118,7 +118,8 @@ def class_distribution(decision: pd.DataFrame) -> None:
     for c in (1, 5):  # nojo (a menor classe) e surpresa (a que mais perdeu duplicatas)
         text = f"{before[c]:.1f}% → {after[c]:.1f}%".replace(".", ",")
         ax.annotate(text, (x[c], max(before[c], after[c])),
-                    xytext=(0, 6), textcoords="offset points", ha="center", fontsize=9, color=INK)
+                    xytext=(0, 5), textcoords="offset points", ha="center", fontsize=8.5, color=INK,
+                    bbox=dict(boxstyle="square,pad=0.15", fc="white", ec="none"), zorder=5)
     ax.set_xticks(x, EMOTIONS, color=INK)
     ax.set_ylabel("% do treino", color=MUTED)
     ax.yaxis.grid(True, color=GRID, lw=0.8)
@@ -131,7 +132,7 @@ def class_distribution(decision: pd.DataFrame) -> None:
 
 def std_histogram(X: np.ndarray) -> None:
     std = X.reshape(len(X), -1).astype(np.float64).std(axis=1)
-    fig, ax = plt.subplots(figsize=(6.4, 2.9))
+    fig, ax = plt.subplots(figsize=(5.2, 2.2))
     ax.hist(std, bins=np.arange(0, std.max() + 1, 1.0), color=BLUE)
     ax.axvline(DEFAULT_STD_THRESHOLD, color=ORANGE, ls="--", lw=1.6)
     n_low = int((std < DEFAULT_STD_THRESHOLD).sum())
@@ -154,9 +155,9 @@ def degradations_example() -> None:
     face = cv2.cvtColor(rgb[30:230, 140:340], cv2.COLOR_RGB2GRAY)  # recorte quadrado do rosto
     face = cv2.resize(face, (48, 48), interpolation=cv2.INTER_AREA)[None]
 
-    rows = [("Ruído gaussiano", "noise", "σ = {}"), ("Desfoque gaussiano", "blur", "kernel {}"),
+    rows = [("Ruído", "noise", "σ = {}"), ("Desfoque", "blur", "kernel {}"),
             ("Resolução", "resolution", "{} px → 48")]
-    fig, axes = plt.subplots(3, 4, figsize=(6.0, 4.7))
+    fig, axes = plt.subplots(3, 4, figsize=(4.4, 3.5))
     for r, (title, kind, fmt) in enumerate(rows):
         panels = [("original", face[0])] + [(fmt.format(lv), apply_degradation(face, kind, lv)[0])
                                             for lv in LEVELS[kind]]
@@ -166,10 +167,10 @@ def degradations_example() -> None:
             if c < len(panels):
                 name, img = panels[c]
                 ax.imshow(img, cmap="gray", vmin=0, vmax=255, interpolation="nearest")
-                ax.set_title(name, fontsize=9, color=INK if c else MUTED)
+                ax.set_title(name, fontsize=8.5, color=INK if c else MUTED, pad=3)
         axes[r, 0].text(-0.12, 0.5, title, transform=axes[r, 0].transAxes, rotation=90, ha="right",
-                        va="center", fontsize=9.5, color=BLUE, fontweight="bold")
-    fig.subplots_adjust(wspace=0.08, hspace=0.32)
+                        va="center", fontsize=8.5, color=BLUE, fontweight="bold")
+    fig.subplots_adjust(wspace=0.06, hspace=0.30)
     _save(fig, "degradations_example_face")
 
 
