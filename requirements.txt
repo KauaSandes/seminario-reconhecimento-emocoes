@@ -6,6 +6,7 @@
 # PyTorch NÃO está aqui de propósito (só a Frente A precisa): instale antes com o índice
 # do CUDA 12.8 ou mais novo (obrigatório na RTX 50 / Blackwell):
 #   pip install torch torchvision --index-url https://download.pytorch.org/whl/cu128
+#   Versão testada na RTX 5060 (sm_120, driver 610.88): torch==2.14.1 torchvision==0.29.1 do índice cu130.
 #
 # O grad-cam puxa opencv-python-headless, que conflita com o opencv-python. Se o cv2 quebrar:
 #   pip uninstall -y opencv-python-headless opencv-python && pip install opencv-python==4.14.0.94

@@ -22,3 +22,15 @@ venv/
 tests/fixtures/ckplus_fake/
 reports/slides/checkpoint2-dados/pptx_build/
 reports/slides/checkpoint1-exemplos/build/
+
+# LaTeX (slides compilados com o tema UFGTeX)
+*.aux
+*.log
+*.nav
+*.out
+*.snm
+*.toc
+*.vrb
+*.synctex.gz
+*.fls
+*.fdb_latexmk
