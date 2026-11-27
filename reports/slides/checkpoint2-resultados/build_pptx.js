@@ -45,7 +45,7 @@ pres.author = "Antonio H. Q. V. Lopes, Kauã L. Sandes, Luccas J. R. Clemente, Y
 const C = pres.SchemeColor;
 
 const W = 10, H = 5.625, M = 0.625, RIGHT = 8.51, CW = RIGHT - M;
-const TOTAL = 7;
+const TOTAL = 8;
 const INF_ASPECT = 171 / 185;
 
 pres.defineSlideMaster({
@@ -214,10 +214,30 @@ pres.addSection({ title: "Resultados" });
 	s.addNotes("(55 s) As quatro métricas saem do mesmo módulo para todos os métodos e são gravadas num JSON padronizado. A acurácia sozinha engana: a linha de base que só responde 'alegria' acerta um quarto, mas não reconhece nada, e o F1 macro mostra isso. Por isso a nossa métrica principal de comparação é o F1 macro, acompanhado da acurácia.");
 }
 
-// ------------------------------------------------------------------ 4. Resultados
+// ------------------------------------------------------------------ 4. Métodos comparados
 {
 	const s = pres.addSlide({ masterName: "CONTEUDO", sectionTitle: "Resultados" });
-	s.addText("4. Resultados preliminares (validação)", { placeholder: "title" });
+	s.addText("4. Os métodos comparados", { placeholder: "title" });
+	const name = (n, tag, color) => [b(n, { breakLine: true }), t(tag, { fontSize: 10.5, bold: true, color })];
+	const fsz = 12;
+	table(s, { y: 1.12, colW: [1.9, 2.55, 3.435], fontSize: fsz, header: ["Método", "O que o modelo recebe", "Como decide"], rows: [
+		[name("Classe majoritária", "linha de base", HEX.muted), "nada", "responde sempre a emoção mais comum do treino (alegria)"],
+		[name("Pixels + SVM", "linha de base", HEX.muted), "2.304 pixels crus (48×48)", "SVM linear: um peso por pixel"],
+		[name("HOG + SVM", "Frente B", C.accent2), "900 números de bordas (HOG), após equalização e gaussiano", "SVM linear, com o C escolhido na validação"],
+		[name("CNN do zero", "Frente A", C.accent1), "imagem 48×48", "3 blocos de convolução 3×3 aprendem os próprios filtros (3,5 M parâmetros)"],
+		[name("ResNet-18", "Frente A", C.accent1), "imagem ampliada para 224×224", "18 camadas pré-treinadas no ImageNet, ajustadas às 7 emoções (11,2 M parâmetros)"],
+	] });
+	block(s, { y: 4.22, h: 0.7, title: "Mesma regra para todos", size: 13.5, body: [
+		t(`Aprendem só com o treino (${int(D.data.train_after)} imagens) e são medidos na validação (${int(D.data.val)}). O teste fica guardado para a avaliação final.`),
+	] });
+	pageNumber(s, 4);
+	s.addNotes("(45 s) Comparamos cinco métodos, do mais simples ao mais sofisticado. As duas linhas de base dão o piso: a classe majoritária nem olha a imagem, e o SVM sobre os pixels crus mostra o que se consegue sem nenhum descritor. O HOG + SVM, da Frente B, descreve as bordas de cada região do rosto com um descritor projetado à mão. A CNN do zero, da Frente A, aprende os próprios filtros de convolução a partir dos dados. A ResNet-18 reaproveita filtros já aprendidos em 1,2 milhão de fotos do ImageNet e só é ajustada às 7 emoções. Todos aprendem no mesmo treino e são medidos na mesma validação, então a comparação a seguir é direta.");
+}
+
+// ------------------------------------------------------------------ 5. Resultados
+{
+	const s = pres.addSlide({ masterName: "CONTEUDO", sectionTitle: "Resultados" });
+	s.addText("5. Resultados preliminares (validação)", { placeholder: "title" });
 	const labels = D.order.map((k) => R[k].label);
 	s.addChart(pres.charts.BAR, [
 		{ name: "Acurácia", labels, values: D.order.map((k) => R[k].accuracy) },
@@ -238,16 +258,16 @@ pres.addSection({ title: "Resultados" });
 	s.addText(`Redes (Frente A): RTX 5060, precisão mista, seed 42, ${minutes(cnn.train_time_s)} e ${minutes(res.train_time_s)} de treino. ` +
 		`HOG + SVM (Frente B): CPU, ${minutes(hog.train_time_s)}. Referência: Khaireddin e Chen (2021), 73,3% no teste.`,
 		{ x: M, y: 4.7, w: CW, h: 0.4, fontSize: 10.5, color: HEX.muted, margin: 0, isTextBox: true, objectName: "Rodapé" });
-	pageNumber(s, 4);
+	pageNumber(s, 5);
 	const pix = R.pixels_linearsvc;
 	const pixNote = pix ? ` Com o mesmo SVM sobre os pixels brutos, fica em ${pct(pix.accuracy)}: o descritor HOG ganha ${dec(100 * (hog.accuracy - pix.accuracy), 1)} pontos.` : "";
 	s.addNotes(`(65 s) Todos os números são da validação. Linha de base: ${pct(R.majority.accuracy)}. O primeiro clássico, HOG + SVM linear, chega a ${pct(hog.accuracy)} (F1 ${dec(hog.f1_macro)}).${pixNote} A CNN do zero chega a ${pct(cnn.accuracy)} e a ResNet-18 a ${pct(res.accuracy)} (F1 ${dec(res.f1_macro)}). A transferência do ImageNet ajuda mesmo em imagens cinza de 48×48. A referência da literatura é 73,3% no teste, com uma VGG ajustada com cuidado.`);
 }
 
-// ------------------------------------------------------------------ 5. F1 por classe
+// ------------------------------------------------------------------ 6. F1 por classe
 {
 	const s = pres.addSlide({ masterName: "CONTEUDO", sectionTitle: "Resultados" });
-	s.addText("5. Desempenho por emoção (F1)", { placeholder: "title" });
+	s.addText("6. Desempenho por emoção (F1)", { placeholder: "title" });
 	const series = ["hog_linearsvc", "cnn_scratch", "resnet18"].filter((k) => R[k]);
 	const colors = { hog_linearsvc: HEX.orange, cnn_scratch: HEX.green, resnet18: HEX.blue };
 	s.addChart(pres.charts.BAR, series.map((k) => ({ name: R[k].label, labels: EMO, values: R[k].f1_per_class })), {
@@ -263,14 +283,14 @@ pres.addSection({ title: "Resultados" });
 		t(`A CNN do zero nunca acerta o nojo (F1 ${f("cnn_scratch", 1)}); a ResNet-18 chega a ${f("resnet18", 1)}. `),
 		t(`Alegria (${f("resnet18", 3)}) e surpresa (${f("resnet18", 5)}) são as mais fáceis.`),
 	] });
-	pageNumber(s, 5);
+	pageNumber(s, 6);
 	s.addNotes("(55 s) O F1 por classe explica o F1 macro. Alegria e surpresa têm mudanças grandes na boca e nos olhos, e todos os métodos vão bem. O nojo, com pouco mais de 1% do treino, é o problema: a CNN do zero nunca o prevê. O próximo passo é treinar com os pesos de classe que já existem na base comum.");
 }
 
-// ------------------------------------------------------------------ 6. Matriz de confusão
+// ------------------------------------------------------------------ 7. Matriz de confusão
 {
 	const s = pres.addSlide({ masterName: "CONTEUDO", sectionTitle: "Resultados" });
-	s.addText("6. Onde a ResNet-18 erra", { placeholder: "title" });
+	s.addText("7. Onde a ResNet-18 erra", { placeholder: "title" });
 	const cm = R.resnet18.confusion_matrix;
 	const abbr = ["raiva", "nojo", "medo", "alegria", "tristeza", "surpresa", "neutro"];
 	const ramp = (f) => {   // branco -> UFGBlue (sequencial, um tom)
@@ -304,15 +324,15 @@ pres.addSection({ title: "Resultados" });
 	] });
 	s.addText("Linhas: emoção real; colunas: emoção prevista; cor mais escura = maior fração da linha. Expressões sutis e parecidas em 48×48 pixels são as mais trocadas, como na literatura.",
 		{ x: M, y: 4.25, w: CW, h: 0.55, fontSize: 12, color: HEX.muted, margin: 0, isTextBox: true, objectName: "Leitura" });
-	pageNumber(s, 6);
+	pageNumber(s, 7);
 	s.addNotes("(50 s) Linhas são a emoção real e colunas a prevista; a diagonal são os acertos. As confusões principais são entre tristeza, neutro e medo, que diferem pouco numa imagem de 48 por 48. O nojo é confundido sobretudo com raiva. É o padrão relatado na literatura da FER-2013.");
 }
 
-// ------------------------------------------------------------------ 7. Próximos passos
+// ------------------------------------------------------------------ 8. Próximos passos
 pres.addSection({ title: "Encerramento" });
 {
 	const s = pres.addSlide({ masterName: "CONTEUDO", sectionTitle: "Encerramento" });
-	s.addText("7. Próximos passos", { placeholder: "title" });
+	s.addText("8. Próximos passos", { placeholder: "title" });
 	table(s, { y: 1.2, colW: [1.7, 6.19], header: ["Quem", "Próximo passo"], rows: [
 		[[b("Frente A")], "Treinar com pesos de classe (nojo); Grad-CAM e FFT2 dos filtros aprendidos"],
 		[[b("Frente B")], "Descritores LBP, Gabor e DCT; k-NN; ajuste do SVM na validação"],
@@ -321,7 +341,7 @@ pres.addSection({ title: "Encerramento" });
 	block(s, { y: 3.35, h: 0.95, title: "Situação", body: [
 		t(`${D.order.length} métodos avaliados com os mesmos dados e as mesmas métricas. O teste segue intocado para a avaliação final.`),
 	] });
-	pageNumber(s, 7);
+	pageNumber(s, 8);
 	s.addNotes("(40 s) Próximas semanas: balancear as classes, completar os descritores clássicos, rodar a robustez e, por fim, a avaliação única no teste.\n\n" +
 		"PERGUNTAS PROVÁVEIS:\n" +
 		"• Por que validação e não teste? O teste é usado uma única vez, no final, para não ajustarmos nada a ele.\n" +
