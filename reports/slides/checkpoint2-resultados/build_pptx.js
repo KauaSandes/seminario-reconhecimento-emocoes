@@ -239,7 +239,9 @@ pres.addSection({ title: "Resultados" });
 		`HOG + SVM (Frente B): CPU, ${minutes(hog.train_time_s)}. Referência: Khaireddin e Chen (2021), 73,3% no teste.`,
 		{ x: M, y: 4.7, w: CW, h: 0.4, fontSize: 10.5, color: HEX.muted, margin: 0, isTextBox: true, objectName: "Rodapé" });
 	pageNumber(s, 4);
-	s.addNotes(`(65 s) Todos os números são da validação. Linha de base: ${pct(R.majority.accuracy)}. O primeiro clássico, HOG + SVM linear, chega a ${pct(hog.accuracy)} (F1 ${dec(hog.f1_macro)}). A CNN do zero chega a ${pct(cnn.accuracy)} e a ResNet-18 a ${pct(res.accuracy)} (F1 ${dec(res.f1_macro)}). A transferência do ImageNet ajuda mesmo em imagens cinza de 48×48. A referência da literatura é 73,3% no teste, com uma VGG ajustada com cuidado.`);
+	const pix = R.pixels_linearsvc;
+	const pixNote = pix ? ` Com o mesmo SVM sobre os pixels brutos, fica em ${pct(pix.accuracy)}: o descritor HOG ganha ${dec(100 * (hog.accuracy - pix.accuracy), 1)} pontos.` : "";
+	s.addNotes(`(65 s) Todos os números são da validação. Linha de base: ${pct(R.majority.accuracy)}. O primeiro clássico, HOG + SVM linear, chega a ${pct(hog.accuracy)} (F1 ${dec(hog.f1_macro)}).${pixNote} A CNN do zero chega a ${pct(cnn.accuracy)} e a ResNet-18 a ${pct(res.accuracy)} (F1 ${dec(res.f1_macro)}). A transferência do ImageNet ajuda mesmo em imagens cinza de 48×48. A referência da literatura é 73,3% no teste, com uma VGG ajustada com cuidado.`);
 }
 
 // ------------------------------------------------------------------ 5. F1 por classe
